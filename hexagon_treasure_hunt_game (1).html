@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Caça ao Tesouro Hexagonal - Edição Especial</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Font Outfit -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: linear-gradient(135deg, #090d16 0%, #111827 50%, #090d16 100%);
+            color: #f8fafc;
+            min-height: 100vh;
+            user-select: none;
+        }
+
+        /* Container da Grade Hexagonal */
+        .hex-grid-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            overflow-x: auto;
+        }
+
+        .hex-row {
+            display: flex;
+            margin-bottom: -14px; /* Sobreposição vertical para formato de colmeia */
+        }
+
+        .hex-row:nth-child(even) {
+            transform: translateX(32px); /* Deslocamento offset das linhas pares */
+        }
+
+        /* Estrutura Base do Hexágono */
+        .hex {
+            width: 64px;
+            height: 72px;
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+            margin: 0 2px;
+            position: relative;
+            cursor: default;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .hex-inner {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        /* 1. ESTADO VISUAL: CASAS ESCONDIDAS */
+        .hex-hidden {
+            background: linear-gradient(145deg, #1e293b, #0f172a);
+            box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        /* 2. ESTADO VISUAL: REVELADA COM ITEM NÃO COLETADO */
+        .hex-item-uncollected {
+            background: linear-gradient(145deg, #3b0764, #2e1065);
+            box-shadow: inset 0 0 12px rgba(168, 85, 247, 0.6);
+            animation: pulse-item-glow 1.8s infinite alternate;
+        }
+
+        @keyframes pulse-item-glow {
+            0% {
+                filter: drop-shadow(0 0 4px #a855f7) brightness(1);
+            }
+            100% {
+                filter: drop-shadow(0 0 12px #c084fc) brightness(1.35);
+            }
+        }
+
+        /* 3. ESTADO VISUAL: VISITADA / VAZIA (Sem item) */
+        .hex-visited {
+            background: rgba(15, 23, 42, 0.55) !important;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.95);
+            opacity: 0.45;
+            filter: grayscale(0.7);
+        }
+        .hex-visited::after {
+            content: '';
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        /* 4. ESTADO VISUAL: CASAS VÁLIDAS DE MOVIMENTO */
+        .hex-valid-move {
+            animation: pulse-move 1.2s infinite alternate !important;
+            cursor: pointer !important;
+            z-index: 10;
+        }
+
+        @keyframes pulse-move {
+            0% {
+                filter: drop-shadow(0 0 4px #06b6d4) brightness(1.1);
+                transform: scale(0.96);
+            }
+            100% {
+                filter: drop-shadow(0 0 14px #22d3ee) brightness(1.4);
+                transform: scale(1.08);
+            }
+        }
+
+        /* Marcadores dos Jogadores */
+        .player-1-marker {
+            outline: 3px solid #3b82f6;
+            box-shadow: 0 0 20px #3b82f6;
+            z-index: 25 !important;
+            opacity: 1 !important;
+        }
+
+        .player-2-marker {
+            outline: 3px solid #ef4444;
+            box-shadow: 0 0 20px #ef4444;
+            z-index: 25 !important;
+            opacity: 1 !important;
+        }
+
+        /* Animação para Badge de Turno Extra */
+        @keyframes pulse-badge {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.06); opacity: 0.88; }
+        }
+        .extra-turn-badge {
+            animation: pulse-badge 1s infinite ease-in-out;
+        }
+
+        /* Dado D6 3D Interativo */
+        .dice {
+            width: 60px;
+            height: 60px;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        .dice-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(145deg, #ffffff, #e2e8f0);
+            border: 2px solid #cbd5e1;
+            border-radius: 12px;
+            display: grid;
+            grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+            padding: 6px;
+            box-shadow: inset 0 0 8px rgba(0,0,0,0.25);
+        }
+
+        .dot {
+            display: block;
+            width: 10px;
+            height: 10px;
+            background-color: #0f172a;
+            border-radius: 50%;
+            align-self: center;
+            justify-self: center;
+        }
+
+        .face-1 { transform: translateZ(30px); }
+        .face-2 { transform: rotateY(180deg) translateZ(30px); }
+        .face-3 { transform: rotateY(-90deg) translateZ(30px); }
+        .face-4 { transform: rotateY(90deg) translateZ(30px); }
+        .face-5 { transform: rotateX(-90deg) translateZ(30px); }
+        .face-6 { transform: rotateX(90deg) translateZ(30px); }
+
+        .face-1 .dot:nth-child(1) { grid-area: 2 / 2; background-color: #ef4444; width: 14px; height: 14px; }
+        .face-2 .dot:nth-child(1) { grid-area: 1 / 1; }
+        .face-2 .dot:nth-child(2) { grid-area: 3 / 3; }
+        .face-3 .dot:nth-child(1) { grid-area: 1 / 1; }
+        .face-3 .dot:nth-child(2) { grid-area: 2 / 2; }
+        .face-3 .dot:nth-child(3) { grid-area: 3 / 3; }
+        .face-4 .dot:nth-child(1) { grid-area: 1 / 1; }
+        .face-4 .dot:nth-child(2) { grid-area: 1 / 3; }
+        .face-4 .dot:nth-child(3) { grid-area: 3 / 1; }
+        .face-4 .dot:nth-child(4) { grid-area: 3 / 3; }
+        .face-5 .dot:nth-child(1) { grid-area: 1 / 1; }
+        .face-5 .dot:nth-child(2) { grid-area: 1 / 3; }
+        .face-5 .dot:nth-child(3) { grid-area: 2 / 2; }
+        .face-5 .dot:nth-child(4) { grid-area: 3 / 1; }
+        .face-5 .dot:nth-child(5) { grid-area: 3 / 3; }
+        .face-6 .dot:nth-child(1) { grid-area: 1 / 1; }
+        .face-6 .dot:nth-child(2) { grid-area: 1 / 3; }
+        .face-6 .dot:nth-child(3) { grid-area: 2 / 1; }
+        .face-6 .dot:nth-child(4) { grid-area: 2 / 3; }
+        .face-6 .dot:nth-child(5) { grid-area: 3 / 1; }
+        .face-6 .dot:nth-child(6) { grid-area: 3 / 3; }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen">
+
+    <!-- CABEÇALHO SUPERIOR -->
+    <header class="bg-slate-900/90 backdrop-blur-md border-b border-slate-800 p-4 sticky top-0 z-50 shadow-md">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="p-2.5 bg-amber-500/20 text-amber-400 rounded-xl border border-amber-500/30">
+                    <i class="fa-solid fa-gem text-2xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-black tracking-wide text-white">Caça ao Tesouro Hexagonal</h1>
+                    <p class="text-xs text-slate-400">Duelo 1v1 • Tabuleiro de 45 Peças</p>
+                </div>
+            </div>
+
+            <!-- CONTROLES E CHAVE DEBUG (MODO TESTE) -->
+            <div class="flex items-center gap-4">
+                <label class="inline-flex items-center cursor-pointer bg-slate-800 px-3.5 py-2 rounded-xl border border-slate-700 hover:bg-slate-700/80 transition">
+                    <input type="checkbox" id="debug-toggle" class="sr-only peer" onchange="toggleDebugMode(this.checked)">
+                    <div class="relative w-9 h-5 bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+                    <span class="ms-2.5 text-xs font-bold text-slate-300">Modo Teste (Revelar Tudo)</span>
+                </label>
+
+                <button onclick="resetGame()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold py-2 px-3.5 rounded-xl border border-slate-700 transition flex items-center gap-2">
+                    <i class="fa-solid fa-rotate-right"></i> Reiniciar
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ÁREA PRINCIPAL -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 flex flex-col lg:flex-row gap-6 items-start">
+
+        <!-- PAINEL LATERAL (STATUS DOS JOGADORES, DADO E HISTÓRICO) -->
+        <div class="w-full lg:w-80 flex flex-col gap-4">
+            
+            <!-- CARD JOGADOR 1 -->
+            <div id="card-p1" class="p-4 rounded-2xl border-2 transition-all bg-slate-800/80 border-blue-500/80 shadow-lg shadow-blue-500/10">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-2">
+                        <span class="w-3.5 h-3.5 rounded-full bg-blue-500 inline-block shadow-sm shadow-blue-400"></span>
+                        <h2 class="font-bold text-base text-blue-400">Jogador 1</h2>
+                    </div>
+                    <span id="badge-p1" class="text-[10px] font-extrabold px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/40 uppercase">SEU TURNO</span>
+                </div>
+
+                <!-- Indicador de Rodada Extra -->
+                <div id="extra-badge-p1" class="hidden mb-2 bg-amber-500/20 border border-amber-500/50 text-amber-300 text-xs font-extrabold p-1.5 rounded-lg flex items-center justify-center gap-2 extra-turn-badge">
+                    <i class="fa-solid fa-bolt text-amber-400"></i> RODADA EXTRA PENDENTE!
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 mt-2 text-sm">
+                    <div class="bg-slate-900/80 p-2 rounded-xl border border-slate-700/50">
+                        <span class="text-[11px] text-slate-400 block font-semibold">Estrelas</span>
+                        <div class="text-amber-400 font-extrabold text-base flex items-center gap-1.5">
+                            <i class="fa-solid fa-star"></i> <span id="stars-p1">0</span> / 5
+                        </div>
+                    </div>
+                    <div class="bg-slate-900/80 p-2 rounded-xl border border-slate-700/50">
+                        <span class="text-[11px] text-slate-400 block font-semibold">Vidas (Escudos)</span>
+                        <div class="text-emerald-400 font-extrabold text-base flex items-center gap-1.5">
+                            <i class="fa-solid fa-shield-halved"></i> <span id="lives-p1">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CARD JOGADOR 2 -->
+            <div id="card-p2" class="p-4 rounded-2xl border-2 opacity-60 transition-all bg-slate-800/40 border-slate-700">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-2">
+                        <span class="w-3.5 h-3.5 rounded-full bg-red-500 inline-block shadow-sm shadow-red-400"></span>
+                        <h2 class="font-bold text-base text-red-400">Jogador 2</h2>
+                    </div>
+                    <span id="badge-p2" class="text-[10px] font-extrabold px-2 py-0.5 rounded bg-slate-700 text-slate-400 uppercase hidden">AGUARDANDO</span>
+                </div>
+
+                <!-- Indicador de Rodada Extra -->
+                <div id="extra-badge-p2" class="hidden mb-2 bg-amber-500/20 border border-amber-500/50 text-amber-300 text-xs font-extrabold p-1.5 rounded-lg flex items-center justify-center gap-2 extra-turn-badge">
+                    <i class="fa-solid fa-bolt text-amber-400"></i> RODADA EXTRA PENDENTE!
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 mt-2 text-sm">
+                    <div class="bg-slate-900/80 p-2 rounded-xl border border-slate-700/50">
+                        <span class="text-[11px] text-slate-400 block font-semibold">Estrelas</span>
+                        <div class="text-amber-400 font-extrabold text-base flex items-center gap-1.5">
+                            <i class="fa-solid fa-star"></i> <span id="stars-p2">0</span> / 5
+                        </div>
+                    </div>
+                    <div class="bg-slate-900/80 p-2 rounded-xl border border-slate-700/50">
+                        <span class="text-[11px] text-slate-400 block font-semibold">Vidas (Escudos)</span>
+                        <div class="text-emerald-400 font-extrabold text-base flex items-center gap-1.5">
+                            <i class="fa-solid fa-shield-halved"></i> <span id="lives-p2">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CONTROLE DE DADO E PASSOS -->
+            <div class="bg-slate-800/80 border border-slate-700/80 p-4 rounded-2xl flex flex-col items-center justify-center gap-3 shadow-md">
+                <div class="text-center">
+                    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Passos Restantes</span>
+                    <span id="moves-left-display" class="text-3xl font-black text-amber-400">0</span>
+                </div>
+
+                <!-- Dado D6 3D -->
+                <div class="my-1 h-20 flex items-center justify-center">
+                    <div class="dice" id="dice">
+                        <div class="dice-face face-1"><span class="dot"></span></div>
+                        <div class="dice-face face-2"><span class="dot"></span><span class="dot"></span></div>
+                        <div class="dice-face face-3"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+                        <div class="dice-face face-4"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+                        <div class="dice-face face-5"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+                        <div class="dice-face face-6"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+                    </div>
+                </div>
+
+                <!-- Botão Rolar Dado -->
+                <button id="btn-roll" onclick="rollDice()" class="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black py-3 px-4 rounded-xl shadow-lg shadow-amber-500/20 transition active:scale-95 flex items-center justify-center gap-2 text-sm uppercase tracking-wide">
+                    <i class="fa-solid fa-dice text-lg"></i> Rolar Dado (D6)
+                </button>
+            </div>
+
+            <!-- HISTÓRICO DE AÇÕES -->
+            <div class="bg-slate-800/50 border border-slate-700/60 p-3 rounded-2xl flex-1 flex flex-col h-44 lg:h-52">
+                <h3 class="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                    <i class="fa-solid fa-scroll text-amber-400"></i> Histórico da Partida
+                </h3>
+                <div id="game-logs" class="flex-1 overflow-y-auto space-y-1.5 text-xs text-slate-300 pr-1">
+                    <p class="text-slate-500 italic">Que vença o melhor caçador de tesouros!</p>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ÁREA DO TABULEIRO HEXAGONAL -->
+        <div class="flex-1 w-full bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col items-center justify-center min-h-[530px] relative overflow-hidden shadow-2xl">
+            
+            <!-- Legenda dos Estados das Peças -->
+            <div class="w-full flex flex-wrap items-center justify-center gap-3 text-xs text-slate-300 mb-4 bg-slate-800/60 py-2.5 px-4 rounded-xl border border-slate-700/60 shadow-sm">
+                <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-slate-700 inline-block border border-slate-500"></span> Oculta</span>
+                <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-purple-600 inline-block ring-2 ring-purple-400"></span> Revelada c/ Item</span>
+                <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-slate-950/80 inline-block border border-dashed border-slate-600"></span> Visitada / Vazia</span>
+                <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-cyan-400 inline-block animate-pulse"></span> Movimento Válido</span>
+            </div>
+
+            <!-- Container do Tabuleiro Hexagonal (5x9 = 45 peças) -->
+            <div id="board-container" class="hex-grid-container my-auto">
+                <!-- Peças geradas dinamicamente via JS -->
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- MODAL DE NOTIFICAÇÃO E AVISOS -->
+    <div id="modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-slate-800 border-2 border-amber-500/50 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl transform transition-all scale-95">
+            <div id="modal-icon" class="text-5xl mb-3">⭐</div>
+            <h3 id="modal-title" class="text-xl font-extrabold text-white mb-2">Título</h3>
+            <p id="modal-message" class="text-sm text-slate-300 mb-6">Mensagem descritiva...</p>
+            <button onclick="closeModal()" class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2.5 px-4 rounded-xl transition uppercase tracking-wide text-sm">
+                Continuar
+            </button>
+        </div>
+    </div>
+
+    <!-- LÓGICA DO JOGO EM JAVASCRIPT -->
+    <script>
+        /* ==========================================================================
+           CONFIGURAÇÕES E CONSTANTES
+           ========================================================================== */
+        const ROWS = 5;
+        const COLS = 9; // Grid 5x9 = 45 Peças Hexagonais
+
+        const ITEM_TYPES = {
+            STAR: { id: 'STAR', name: 'Estrela', icon: 'fa-star', color: 'text-amber-400' },
+            BOMB: { id: 'BOMB', name: 'Bomba', icon: 'fa-bomb', color: 'text-red-500' },
+            LIFE: { id: 'LIFE', name: 'Vida Extra', icon: 'fa-shield-halved', color: 'text-emerald-400' },
+            MAP: { id: 'MAP', name: 'Mapa Revelador', icon: 'fa-map-location-dot', color: 'text-cyan-400' },
+            RADAR_ADJ: { id: 'RADAR_ADJ', name: 'Radar Adjacente', icon: 'fa-eye', color: 'text-indigo-400' },
+            RADAR_LINE: { id: 'RADAR_LINE', name: 'Raio em Linha', icon: 'fa-bolt-lightning', color: 'text-purple-400' },
+            EMPTY: { id: 'EMPTY', name: 'Vazio', icon: '', color: '' }
+        };
+
+        /* ==========================================================================
+           ESTADO DO JOGO
+           ========================================================================== */
+        let board = [];
+        let currentPlayer = 1;
+        let players = {
+            1: { pos: { r: 0, c: 0 }, stars: 0, lives: 0, extraTurns: 0 },
+            2: { pos: { r: 4, c: 8 }, stars: 0, lives: 0, extraTurns: 0 }
+        };
+        let diceValue = 0;
+        let movesLeft = 0;
+        let isRolling = false;
+        let isDebugMode = false;
+        let isGameOver = false;
+
+        /* ==========================================================================
+           INICIALIZAÇÃO DO JOGO
+           ========================================================================== */
+        window.onload = function() {
+            initGame();
+        };
+
+        function initGame() {
+            isGameOver = false;
+            currentPlayer = 1;
+            players[1] = { pos: { r: 0, c: 0 }, stars: 0, lives: 0, extraTurns: 0 };
+            players[2] = { pos: { r: 4, c: 8 }, stars: 0, lives: 0, extraTurns: 0 };
+            movesLeft = 0;
+            diceValue = 0;
+            
+            generateBoardItems();
+            
+            // Posições iniciais dos jogadores
+            board[0][0].revealed = true;
+            board[0][0].itemCollected = true;
+            board[0][0].item = ITEM_TYPES.EMPTY;
+
+            board[4][8].revealed = true;
+            board[4][8].itemCollected = true;
+            board[4][8].item = ITEM_TYPES.EMPTY;
+
+            renderBoard();
+            updateHUD();
+
+            logMessage("🎉 Partida iniciada! Jogador 1, role o dado.");
+        }
+
+        /* Geração e embaralhamento dos itens nas 45 casas */
+        function generateBoardItems() {
+            let items = [
+                ...Array(12).fill(ITEM_TYPES.STAR),
+                ...Array(8).fill(ITEM_TYPES.BOMB),
+                ...Array(5).fill(ITEM_TYPES.LIFE),
+                ...Array(5).fill(ITEM_TYPES.MAP),
+                ...Array(5).fill(ITEM_TYPES.RADAR_ADJ),
+                ...Array(5).fill(ITEM_TYPES.RADAR_LINE),
+                ...Array(5).fill(ITEM_TYPES.EMPTY) // Total = 45 peças
+            ];
+
+            // Algoritmo Fisher-Yates para embaralhar
+            for (let i = items.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [items[i], items[j]] = [items[j], items[i]];
+            }
+
+            board = [];
+            let index = 0;
+            for (let r = 0; r < ROWS; r++) {
+                let row = [];
+                for (let c = 0; c < COLS; c++) {
+                    let tileItem = items[index];
+                    row.push({
+                        r: r,
+                        c: c,
+                        item: tileItem,
+                        revealed: false,          // Discutida por habilidade ou pisada
+                        itemCollected: false,     // Se o item já foi recolhido
+                        tempRevealed: false       // Revelação temporária de radar
+                    });
+                    index++;
+                }
+                board.push(row);
+            }
+        }
+
+        /* ==========================================================================
+           RENDERIZAÇÃO DO TABULEIRO E INTERFACE
+           ========================================================================== */
+        function renderBoard() {
+            const container = document.getElementById('board-container');
+            container.innerHTML = '';
+
+            const validMoves = (movesLeft > 0) ? getValidMoves(players[currentPlayer].pos) : [];
+
+            for (let r = 0; r < ROWS; r++) {
+                const rowDiv = document.createElement('div');
+                rowDiv.className = 'hex-row';
+
+                for (let c = 0; c < COLS; c++) {
+                    const tile = board[r][c];
+                    const isP1 = (players[1].pos.r === r && players[1].pos.c === c);
+                    const isP2 = (players[2].pos.r === r && players[2].pos.c === c);
+                    const isValidMove = validMoves.some(m => m.r === r && m.c === c);
+
+                    const isVisible = tile.revealed || tile.tempRevealed || isDebugMode;
+                    const hasItemToCollect = isVisible && !tile.itemCollected && tile.item.id !== 'EMPTY';
+                    const isVisitedEmpty = tile.itemCollected || (isVisible && tile.item.id === 'EMPTY');
+
+                    const hexEl = document.createElement('div');
+                    
+                    // Aplicação das classes visuais
+                    if (isVisitedEmpty) {
+                        hexEl.className = 'hex hex-visited';
+                    } else if (hasItemToCollect) {
+                        hexEl.className = 'hex hex-item-uncollected';
+                    } else {
+                        hexEl.className = 'hex hex-hidden';
+                    }
+
+                    if (isValidMove) {
+                        hexEl.classList.add('hex-valid-move');
+                        hexEl.onclick = () => makeMove(r, c);
+                    }
+
+                    if (isP1) hexEl.classList.add('player-1-marker');
+                    if (isP2) hexEl.classList.add('player-2-marker');
+
+                    // Conteúdo interno da peça
+                    const innerEl = document.createElement('div');
+                    innerEl.className = 'hex-inner';
+
+                    if (isP1 && isP2) {
+                        innerEl.innerHTML = `<div class="flex gap-1 text-xs"><i class="fa-solid fa-user text-blue-400"></i><i class="fa-solid fa-user text-red-400"></i></div>`;
+                    } else if (isP1) {
+                        innerEl.innerHTML = `<i class="fa-solid fa-user-ninja text-xl text-blue-400 drop-shadow"></i>`;
+                    } else if (isP2) {
+                        innerEl.innerHTML = `<i class="fa-solid fa-user-astronaut text-xl text-red-400 drop-shadow"></i>`;
+                    } else if (hasItemToCollect) {
+                        innerEl.innerHTML = `<i class="fa-solid ${tile.item.icon} text-lg ${tile.item.color}"></i>`;
+                    } else if (isVisitedEmpty) {
+                        innerEl.innerHTML = ``;
+                    } else {
+                        innerEl.innerHTML = `<i class="fa-solid fa-question text-slate-600 text-xs"></i>`;
+                    }
+
+                    hexEl.appendChild(innerEl);
+                    rowDiv.appendChild(hexEl);
+                }
+                container.appendChild(rowDiv);
+            }
+        }
+
+        function updateHUD() {
+            document.getElementById('stars-p1').innerText = players[1].stars;
+            document.getElementById('lives-p1').innerText = players[1].lives;
+            document.getElementById('stars-p2').innerText = players[2].stars;
+            document.getElementById('lives-p2').innerText = players[2].lives;
+
+            // Indicadores de Rodada Extra
+            const extraBadgeP1 = document.getElementById('extra-badge-p1');
+            const extraBadgeP2 = document.getElementById('extra-badge-p2');
+            if (players[1].extraTurns > 0) extraBadgeP1.classList.remove('hidden'); else extraBadgeP1.classList.add('hidden');
+            if (players[2].extraTurns > 0) extraBadgeP2.classList.remove('hidden'); else extraBadgeP2.classList.add('hidden');
+
+            const cardP1 = document.getElementById('card-p1');
+            const cardP2 = document.getElementById('card-p2');
+            const badgeP1 = document.getElementById('badge-p1');
+            const badgeP2 = document.getElementById('badge-p2');
+
+            if (currentPlayer === 1) {
+                cardP1.className = "p-4 rounded-2xl border-2 transition-all bg-slate-800/80 border-blue-500 shadow-lg shadow-blue-500/10 opacity-100";
+                cardP2.className = "p-4 rounded-2xl border-2 transition-all bg-slate-800/40 border-slate-700/50 opacity-60";
+                badgeP1.classList.remove('hidden');
+                badgeP2.classList.add('hidden');
+            } else {
+                cardP2.className = "p-4 rounded-2xl border-2 transition-all bg-slate-800/80 border-red-500 shadow-lg shadow-red-500/10 opacity-100";
+                cardP1.className = "p-4 rounded-2xl border-2 transition-all bg-slate-800/40 border-slate-700/50 opacity-60";
+                badgeP2.classList.remove('hidden');
+                badgeP1.classList.add('hidden');
+            }
+
+            document.getElementById('moves-left-display').innerText = movesLeft;
+
+            const btnRoll = document.getElementById('btn-roll');
+            if (movesLeft > 0 || isRolling || isGameOver) {
+                btnRoll.disabled = true;
+                btnRoll.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                btnRoll.disabled = false;
+                btnRoll.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        /* ==========================================================================
+           CÁLCULO DE VIZINHOS NA GRADE HEXAGONAL
+           ========================================================================== */
+        function getNeighbors(r, c) {
+            const isEven = (r % 2 === 0);
+            const offsets = isEven ? [
+                { r: -1, c: -1 }, { r: -1, c: 0 },
+                { r: 0, c: -1 },  { r: 0, c: 1 },
+                { r: 1, c: -1 },  { r: 1, c: 0 }
+            ] : [
+                { r: -1, c: 0 }, { r: -1, c: 1 },
+                { r: 0, c: -1 }, { r: 0, c: 1 },
+                { r: 1, c: 0 },  { r: 1, c: 1 }
+            ];
+
+            let neighbors = [];
+            for (let o of offsets) {
+                let nr = r + o.r;
+                let nc = c + o.c;
+                if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+                    neighbors.push({ r: nr, c: nc });
+                }
+            }
+            return neighbors;
+        }
+
+        function getValidMoves(pos) {
+            return getNeighbors(pos.r, pos.c);
+        }
+
+        /* ==========================================================================
+           MOVIMENTAÇÃO E DADO
+           ========================================================================== */
+        function rollDice() {
+            if (isRolling || movesLeft > 0 || isGameOver) return;
+
+            isRolling = true;
+            const diceEl = document.getElementById('dice');
+            const randomVal = Math.floor(Math.random() * 6) + 1;
+
+            const rotations = {
+                1: 'rotateX(0deg) rotateY(0deg)',
+                2: 'rotateX(0deg) rotateY(180deg)',
+                3: 'rotateX(0deg) rotateY(90deg)',
+                4: 'rotateX(0deg) rotateY(-90deg)',
+                5: 'rotateX(90deg) rotateY(0deg)',
+                6: 'rotateX(-90deg) rotateY(0deg)'
+            };
+
+            diceEl.style.transform = `rotateX(720deg) rotateY(720deg)`;
+
+            setTimeout(() => {
+                diceEl.style.transform = rotations[randomVal];
+                diceValue = randomVal;
+                movesLeft = randomVal;
+                isRolling = false;
+                
+                logMessage(`🎲 **Jogador ${currentPlayer}** tirou **${diceValue}** no dado!`);
+                updateHUD();
+                renderBoard();
+            }, 600);
+        }
+
+        function makeMove(targetR, targetC) {
+            if (movesLeft <= 0 || isGameOver) return;
+
+            clearTempReveals();
+
+            // Mover o jogador
+            players[currentPlayer].pos = { r: targetR, c: targetC };
+            movesLeft--;
+
+            const tile = board[targetR][targetC];
+            tile.revealed = true; // Marca a casa como revelada permanentemente
+
+            let itemTriggered = false;
+
+            // Coleta o item se ainda não tiver sido coletado
+            if (!tile.itemCollected && tile.item.id !== 'EMPTY') {
+                itemTriggered = true;
+                tile.itemCollected = true;
+                triggerItemEffect(tile.item, targetR, targetC);
+            } else {
+                logMessage(`Jogador ${currentPlayer} moveu-se para uma casa vazia.`);
+            }
+
+            if (isGameOver) return;
+
+            // Se nenhum item abriu modal de mensagem, gerencia o fim do passo/turno aqui
+            if (!itemTriggered) {
+                if (movesLeft === 0) {
+                    switchTurn();
+                } else {
+                    updateHUD();
+                    renderBoard();
+                }
+            }
+        }
+
+        /* TROCA DE TURNO E LÓGICA DE RODADAS CONSECUTIVAS / EXTRAS */
+        function switchTurn() {
+            // Se o jogador atual tem uma rodada extra pendente (por conta da morte do oponente em bomba)
+            if (players[currentPlayer].extraTurns > 0) {
+                players[currentPlayer].extraTurns--;
+                movesLeft = 0;
+                logMessage(`⚡ **Jogador ${currentPlayer}** iniciou sua **RODADA EXTRA**!`);
+                showModal("⚡ Rodada Extra!", 
+                    `O Jogador ${currentPlayer} ganhou uma rodada extra pela eliminação do oponente e jogará novamente agora! Role o dado.`, 
+                    () => {
+                        updateHUD();
+                        renderBoard();
+                    }
+                );
+                return;
+            }
+
+            // Caso contrário, altera o turno para o outro jogador
+            currentPlayer = currentPlayer === 1 ? 2 : 1;
+            movesLeft = 0;
+
+            // Se o NOVO jogador atual tem uma rodada extra acumulada a ser jogada após este turno
+            if (players[currentPlayer].extraTurns > 0) {
+                logMessage(`🔄 Turno de **Jogador ${currentPlayer}** (Rodada 1 de 2 seguidas).`);
+            } else {
+                logMessage(`🔄 Turno encerrado! É a vez do **Jogador ${currentPlayer}**.`);
+            }
+
+            updateHUD();
+            renderBoard();
+        }
+
+        /* ==========================================================================
+           EFEITOS DOS ITENS
+           ========================================================================== */
+        function triggerItemEffect(item, r, c) {
+            const player = players[currentPlayer];
+            const otherPlayerNum = currentPlayer === 1 ? 2 : 1;
+
+            // Callback padrão para encerramento de modal
+            const handleTurnAfterModal = () => {
+                if (movesLeft === 0) {
+                    switchTurn();
+                } else {
+                    updateHUD();
+                    renderBoard();
+                }
+            };
+
+            switch (item.id) {
+                case 'STAR':
+                    player.stars += 1;
+                    logMessage(`⭐ **Jogador ${currentPlayer}** coletou 1 Estrela! (${player.stars}/5)`);
+                    
+                    if (player.stars >= 5) {
+                        handleWin(currentPlayer);
+                    } else {
+                        showModal("⭐ Estrela Encontrada!", `Sensacional! O Jogador ${currentPlayer} encontrou uma Estrela. (Total: ${player.stars}/5)`, handleTurnAfterModal);
+                    }
+                    break;
+
+                case 'BOMB':
+                    if (player.lives > 0) {
+                        // Vida/Escudo protege o jogador
+                        player.lives -= 1;
+                        logMessage(`🛡️ **Jogador ${currentPlayer}** ativou uma bomba, mas seu escudo absorveu a explosão!`);
+                        showModal("🛡️ Escudo Ativado!", `Você pisou em uma bomba, mas seu Escudo de Proteção absorveu todo o impacto! Vidas restantes: ${player.lives}`, handleTurnAfterModal);
+                    } else {
+                        // Sem escudo: jogador morre, e o oponente ganha +1 rodada extra
+                        players[otherPlayerNum].extraTurns += 1;
+                        respawnPlayer(currentPlayer);
+                        movesLeft = 0; // Zera os passos restantes da rodada do jogador morto
+                        
+                        logMessage(`💥 **BOOM!** Jogador ${currentPlayer} explodiu e renasceu! **Jogador ${otherPlayerNum} jogará 2 rodadas seguidas!**`);
+                        showModal("💥 BOMBA! VOCÊ EXPLODIU!", 
+                            `BOOM! O Jogador ${currentPlayer} explodiu! Foi movido para uma casa aleatória e o JOGADOR ${otherPlayerNum} JOGARÁ DUAS RODADAS SEGUIDAS!`,
+                            () => {
+                                switchTurn();
+                            }
+                        );
+                    }
+                    break;
+
+                case 'LIFE':
+                    player.lives += 1;
+                    logMessage(`🛡️ **Jogador ${currentPlayer}** adquiru 1 Vida Extra/Escudo.`);
+                    showModal("🛡️ Vida / Escudo!", `O Jogador ${currentPlayer} encontrou um Escudo de Proteção contra bombas!`, handleTurnAfterModal);
+                    break;
+
+                case 'MAP':
+                    revealRandomUnrevealedTile();
+                    logMessage(`🗺️ **Jogador ${currentPlayer}** usou um Mapa e revelou um segredo no tabuleiro.`);
+                    showModal("🗺️ Mapa do Tesouro!", `O mapa revelou permanentemente uma casa oculta no tabuleiro!`, handleTurnAfterModal);
+                    break;
+
+                case 'RADAR_ADJ':
+                    const adjCount = revealAdjacentTilesTemp(r, c);
+                    logMessage(`📡 **Jogador ${currentPlayer}** ativou o Radar Adjacente!`);
+                    showModal("📡 Radar Adjacente!", `${adjCount} casas ao redor foram reveladas para este turno!`, handleTurnAfterModal);
+                    break;
+
+                case 'RADAR_LINE':
+                    const lineCount = revealLineTilesTemp(r, c);
+                    logMessage(`⚡ **Jogador ${currentPlayer}** ativou o Raio em Linha!`);
+                    showModal("⚡ Raio Revelador!", `Uma linha com ${lineCount} casas foi revelada temporariamente!`, handleTurnAfterModal);
+                    break;
+            }
+        }
+
+        /* Reposiciona jogador em casa livre aleatória após explosão */
+        function respawnPlayer(pNum) {
+            let freeSpots = [];
+            const otherPNum = pNum === 1 ? 2 : 1;
+
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    if (!(players[otherPNum].pos.r === r && players[otherPNum].pos.c === c)) {
+                        freeSpots.push({ r, c });
+                    }
+                }
+            }
+
+            if (freeSpots.length > 0) {
+                const spot = freeSpots[Math.floor(Math.random() * freeSpots.length)];
+                players[pNum].pos = spot;
+                board[spot.r][spot.c].revealed = true;
+                board[spot.r][spot.c].itemCollected = true; // Casa de respawn fica limpa
+            }
+        }
+
+        /* Revela permanentemente 1 casa oculta (priorizando Estrelas) */
+        function revealRandomUnrevealedTile() {
+            let hiddenStars = [];
+            let hiddenOthers = [];
+
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    if (!board[r][c].revealed) {
+                        if (board[r][c].item.id === 'STAR') {
+                            hiddenStars.push({ r, c });
+                        } else {
+                            hiddenOthers.push({ r, c });
+                        }
+                    }
+                }
+            }
+
+            let pick = null;
+            if (hiddenStars.length > 0) {
+                pick = hiddenStars[Math.floor(Math.random() * hiddenStars.length)];
+            } else if (hiddenOthers.length > 0) {
+                pick = hiddenOthers[Math.floor(Math.random() * hiddenOthers.length)];
+            }
+
+            if (pick) {
+                board[pick.r][pick.c].revealed = true;
+            }
+        }
+
+        function revealAdjacentTilesTemp(r, c) {
+            const neighbors = getNeighbors(r, c);
+            let count = 0;
+            neighbors.forEach(n => {
+                if (!board[n.r][n.c].revealed) {
+                    board[n.r][n.c].tempRevealed = true;
+                    count++;
+                }
+            });
+            return count;
+        }
+
+        function revealLineTilesTemp(r, c) {
+            const isEven = (r % 2 === 0);
+            const directions = isEven ? [
+                { dr: -1, dc: -1 }, { dr: -1, dc: 0 },
+                { dr: 0, dc: -1 },  { dr: 0, dc: 1 },
+                { dr: 1, dc: -1 },  { dr: 1, dc: 0 }
+            ] : [
+                { dr: -1, dc: 0 }, { dr: -1, dc: 1 },
+                { dr: 0, dc: -1 }, { dr: 0, dc: 1 },
+                { dr: 1, dc: 0 },  { dr: 1, dc: 1 }
+            ];
+
+            const dir = directions[Math.floor(Math.random() * directions.length)];
+            let currR = r + dir.dr;
+            let currC = c + dir.dc;
+            let count = 0;
+
+            while (currR >= 0 && currR < ROWS && currC >= 0 && currC < COLS) {
+                if (!board[currR][currC].revealed) {
+                    board[currR][currC].tempRevealed = true;
+                    count++;
+                }
+                currR += dir.dr;
+                currC += dir.dc;
+            }
+            return count;
+        }
+
+        function clearTempReveals() {
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    board[r][c].tempRevealed = false;
+                }
+            }
+        }
+
+        /* ==========================================================================
+           VITÓRIA E MODAL
+           ========================================================================== */
+        function handleWin(playerNum) {
+            isGameOver = true;
+            showModal("🏆 VITÓRIA SENSACIONAL!", `Parabéns Jogador ${playerNum}! Você coletou as 5 Estrelas e venceu a partida de Caça ao Tesouro!`);
+            logMessage(`🏆 **FIM DE JOGO! Jogador ${playerNum} é o grande Campeão!**`);
+            updateHUD();
+        }
+
+        function toggleDebugMode(enabled) {
+            isDebugMode = enabled;
+            logMessage(enabled ? "🔧 Modo Teste Ativado (Conteúdo de todas as peças revelado)." : "🔧 Modo Teste Desativado.");
+            renderBoard();
+        }
+
+        function logMessage(msg) {
+            const logsContainer = document.getElementById('game-logs');
+            const entry = document.createElement('p');
+            entry.className = "text-xs text-slate-300 border-b border-slate-700/30 pb-1";
+            entry.innerHTML = msg;
+            logsContainer.appendChild(entry);
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+        }
+
+        let modalCallback = null;
+
+        function showModal(title, text, callback = null) {
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-message').innerText = text;
+            document.getElementById('modal').classList.remove('hidden');
+            modalCallback = callback;
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.add('hidden');
+            if (modalCallback) {
+                const cb = modalCallback;
+                modalCallback = null;
+                cb();
+            } else {
+                updateHUD();
+                renderBoard();
+            }
+        }
+
+        function resetGame() {
+            modalCallback = null;
+            closeModal();
+            initGame();
+        }
+    </script>
+</body>
+</html>
